@@ -42,6 +42,48 @@ const TARGETS = [
   { label: "General Fitness", value: "general_fitness" },
 ];
 
+const TERMS_TEXT = `PACEIQ TERMS & CONDITIONS AND PRIVACY POLICY
+
+Last updated: June 2026
+
+1. ACCEPTANCE OF TERMS
+By creating an account and using PaceIQ, you agree to these Terms & Conditions. If you do not agree, please do not use the app.
+
+2. USE OF THE APP
+PaceIQ is a running coach and fitness tracking app. You must be at least 13 years old to use this app. You are responsible for all activity on your account.
+
+3. HEALTH & FITNESS DISCLAIMER
+PaceIQ provides general fitness guidance only. It is NOT a substitute for professional medical advice. Always consult a doctor before starting any exercise program. Stop exercising immediately if you feel pain, dizziness, or discomfort.
+
+4. SAFETY FEATURES
+The SOS and location sharing features are provided as safety tools only. PaceIQ is not responsible for emergency response times or outcomes. Always ensure your emergency contacts are aware and reachable.
+
+5. LOCATION DATA
+With your permission, PaceIQ collects your GPS location to track runs and show nearby runners. Location data is stored securely and never sold to third parties.
+
+6. PERSONAL DATA
+We collect your name, email, age, weight, and fitness data to personalise your experience. Your data is stored securely on Supabase servers. You can delete your account and all data at any time from the Profile screen.
+
+7. RUNNER MATCHING
+The Run Dates feature is for finding running partners only. PaceIQ is not responsible for interactions between users. Always meet in public places and inform someone of your plans.
+
+8. UNSAFE AREA REPORTS
+Users can report unsafe areas to help the community. PaceIQ does not verify these reports. Always use your own judgement about route safety.
+
+9. AI COACHING
+AI coaching is provided for informational purposes only. The AI coach uses your running data to provide suggestions but is not a certified coach or medical professional.
+
+10. SUBSCRIPTION & PAYMENTS
+Pro features require a paid subscription. Subscriptions auto-renew unless cancelled. Refunds are handled per app store policies.
+
+11. CHANGES TO TERMS
+We may update these terms. Continued use of the app means you accept the new terms.
+
+12. CONTACT
+For questions: support@paceiq.app
+
+By tapping "I Agree", you confirm you have read and agree to these Terms & Conditions and Privacy Policy.`;
+
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [step, setStep] = useState(1);
@@ -57,6 +99,8 @@ export default function LoginScreen() {
   const [fitnessLevel, setFitnessLevel] = useState("");
   const [target, setTarget] = useState("");
   const [weeklyGoal, setWeeklyGoal] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -97,6 +141,10 @@ export default function LoginScreen() {
     }
     if (!password || password.length < 6) {
       setError("Password must be at least 6 characters");
+      return false;
+    }
+    if (!agreedToTerms) {
+      setError("Please agree to the Terms & Conditions");
       return false;
     }
     return true;
@@ -199,7 +247,7 @@ export default function LoginScreen() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: "http://localhost:8081",
+        redirectTo: window.location.origin,
         skipBrowserRedirect: false,
       },
     });
@@ -215,7 +263,7 @@ export default function LoginScreen() {
   async function handleForgotPassword() {
     setResetLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: "http://localhost:8081/reset-password",
+      redirectTo: `${window.location.origin}/reset-password`,
     });
     if (error) {
       setError(error.message);
@@ -347,6 +395,28 @@ export default function LoginScreen() {
             onChangeText={setPassword}
             secureTextEntry
           />
+
+          <TouchableOpacity
+            style={styles.termsRow}
+            onPress={() => setAgreedToTerms(!agreedToTerms)}
+          >
+            <View
+              style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}
+            >
+              {agreedToTerms && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.termsText}>
+              I agree to the{" "}
+              <Text style={styles.termsLink} onPress={() => setShowTerms(true)}>
+                Terms & Conditions
+              </Text>{" "}
+              and{" "}
+              <Text style={styles.termsLink} onPress={() => setShowTerms(true)}>
+                Privacy Policy
+              </Text>
+            </Text>
+          </TouchableOpacity>
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity style={styles.button} onPress={handleNextStep}>
             <Text style={styles.buttonText}>Next →</Text>
@@ -538,6 +608,7 @@ export default function LoginScreen() {
         </View>
       )}
 
+      {/* Email Exists Modal */}
       <Modal visible={showEmailExistsModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -560,6 +631,7 @@ export default function LoginScreen() {
         </View>
       </Modal>
 
+      {/* Forgot Password Modal */}
       <Modal visible={showForgotPassword} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -617,6 +689,33 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Terms & Conditions Modal */}
+      <Modal visible={showTerms} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.termsModalBox}>
+            <Text style={styles.modalTitle}>Terms & Conditions</Text>
+            <ScrollView style={styles.termsScroll}>
+              <Text style={styles.termsContent}>{TERMS_TEXT}</Text>
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setAgreedToTerms(true);
+                setShowTerms(false);
+              }}
+            >
+              <Text style={styles.modalButtonText}>I Agree</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowTerms(false)}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -753,6 +852,26 @@ const styles = StyleSheet.create({
   targetBtnSelected: { backgroundColor: "#39FF14", borderColor: "#39FF14" },
   targetText: { color: "#888888", fontSize: 13, fontWeight: "bold" },
   targetTextSelected: { color: "#0D0D0D" },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    width: "100%",
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: "#39FF14",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  checkboxChecked: { backgroundColor: "#39FF14" },
+  checkmark: { color: "#0D0D0D", fontSize: 14, fontWeight: "bold" },
+  termsText: { color: "#888888", fontSize: 13, flex: 1, flexWrap: "wrap" },
+  termsLink: { color: "#39FF14", textDecorationLine: "underline" },
   button: {
     width: "100%",
     backgroundColor: "#39FF14",
@@ -809,6 +928,16 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
   },
+  termsModalBox: {
+    backgroundColor: "#141414",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "80%",
+  },
+  termsScroll: { maxHeight: 400, marginBottom: 16 },
+  termsContent: { color: "#CCCCCC", fontSize: 13, lineHeight: 22 },
   modalTitle: {
     color: "#FFFFFF",
     fontSize: 22,
