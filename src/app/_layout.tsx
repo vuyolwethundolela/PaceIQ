@@ -1,6 +1,7 @@
 import { Stack, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { ThemeProvider } from "../lib/themeContext";
 
 export default function RootLayout() {
   const [loading, setLoading] = useState(true);
@@ -24,9 +25,11 @@ export default function RootLayout() {
   if (loading) return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="login" />
-    </Stack>
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
+      </Stack>
+    </ThemeProvider>
   );
 }

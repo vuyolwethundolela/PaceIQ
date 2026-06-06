@@ -11,13 +11,16 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { THEMES, useTheme } from "../../lib/themeContext";
 
 export default function ProfileScreen() {
+  const { primaryColor, themeName, setTheme } = useTheme();
   const [profile, setProfile] = useState<any>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -95,8 +98,8 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color="#39FF14" size="large" />
+      <View style={[styles.centered, { backgroundColor: "#0D0D0D" }]}>
+        <ActivityIndicator color={primaryColor} size="large" />
       </View>
     );
   }
@@ -111,23 +114,30 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.pageTitle}>Profile</Text>
+      <Text style={[styles.pageTitle, { color: "#FFFFFF" }]}>Profile</Text>
 
       <View style={styles.avatarSection}>
         <TouchableOpacity style={styles.avatarWrapper} onPress={pickImage}>
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            <Image
+              source={{ uri: avatarUrl }}
+              style={[styles.avatar, { borderColor: primaryColor }]}
+            />
           ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+            <View
+              style={[styles.avatarPlaceholder, { borderColor: primaryColor }]}
+            >
+              <Text style={[styles.avatarInitials, { color: primaryColor }]}>
+                {initials}
+              </Text>
             </View>
           )}
           {uploading ? (
             <View style={styles.uploadOverlay}>
-              <ActivityIndicator color="#39FF14" />
+              <ActivityIndicator color={primaryColor} />
             </View>
           ) : (
-            <View style={styles.editBadge}>
+            <View style={[styles.editBadge, { backgroundColor: primaryColor }]}>
               <Text style={styles.editBadgeText}>Edit</Text>
             </View>
           )}
@@ -138,15 +148,19 @@ export default function ProfileScreen() {
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{profile?.fitness_level || "—"}</Text>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
+            {profile?.fitness_level || "—"}
+          </Text>
           <Text style={styles.statLabel}>Level</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{profile?.weekly_goal_km || "—"}</Text>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
+            {profile?.weekly_goal_km || "—"}
+          </Text>
           <Text style={styles.statLabel}>Weekly Goal km</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
             {profile?.target?.replace(/_/g, " ") || "—"}
           </Text>
           <Text style={styles.statLabel}>Target</Text>
@@ -180,26 +194,15 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <View style={[styles.card, styles.planCard]}>
-        <Text style={styles.planLabel}>Current Plan</Text>
-        <View
-          style={[styles.planBadge, profile?.is_pro && styles.planBadgePro]}
-        >
-          <Text
-            style={[
-              styles.planBadgeText,
-              profile?.is_pro && styles.planBadgeTextPro,
-            ]}
-          >
-            {profile?.is_pro ? "PRO" : "FREE"}
-          </Text>
-        </View>
-        {!profile?.is_pro && (
-          <TouchableOpacity style={styles.upgradeButton}>
-            <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Theme Selector */}
+      <TouchableOpacity
+        style={[styles.themeButton, { borderColor: primaryColor }]}
+        onPress={() => setShowThemeModal(true)}
+      >
+        <View style={[styles.themeCircle, { backgroundColor: primaryColor }]} />
+        <Text style={styles.themeButtonText}>App Theme: {themeName}</Text>
+        <Text style={styles.themeArrow}>›</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Sign Out</Text>
@@ -212,6 +215,46 @@ export default function ProfileScreen() {
         <Text style={styles.deleteText}>Delete Account</Text>
       </TouchableOpacity>
 
+      {/* Theme Modal */}
+      <Modal visible={showThemeModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Choose App Theme</Text>
+            <View style={styles.themeGrid}>
+              {THEMES.map((theme) => (
+                <TouchableOpacity
+                  key={theme.name}
+                  style={[
+                    styles.themeOption,
+                    themeName === theme.name && styles.themeOptionSelected,
+                    { borderColor: theme.primary },
+                  ]}
+                  onPress={() => {
+                    setTheme(theme);
+                    setShowThemeModal(false);
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.themeColorDot,
+                      { backgroundColor: theme.primary },
+                    ]}
+                  />
+                  <Text style={styles.themeOptionText}>{theme.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={[styles.modalCancelButton]}
+              onPress={() => setShowThemeModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Modal */}
       <Modal visible={showDeleteModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -246,14 +289,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0D0D0D" },
   content: { padding: 20, paddingBottom: 40 },
-  centered: {
-    flex: 1,
-    backgroundColor: "#0D0D0D",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   pageTitle: {
-    color: "#FFFFFF",
     fontSize: 28,
     fontWeight: "bold",
     marginTop: 48,
@@ -261,13 +298,7 @@ const styles = StyleSheet.create({
   },
   avatarSection: { alignItems: "center", marginBottom: 24 },
   avatarWrapper: { position: "relative", marginBottom: 12 },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: "#39FF14",
-  },
+  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3 },
   avatarPlaceholder: {
     width: 100,
     height: 100,
@@ -276,9 +307,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "#39FF14",
   },
-  avatarInitials: { color: "#39FF14", fontSize: 32, fontWeight: "bold" },
+  avatarInitials: { fontSize: 32, fontWeight: "bold" },
   uploadOverlay: {
     position: "absolute",
     top: 0,
@@ -294,7 +324,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: "#39FF14",
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -315,12 +344,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginHorizontal: 4,
   },
-  statValue: {
-    color: "#39FF14",
-    fontSize: 14,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+  statValue: { fontSize: 14, fontWeight: "bold", textAlign: "center" },
   statLabel: {
     color: "#888888",
     fontSize: 11,
@@ -348,31 +372,18 @@ const styles = StyleSheet.create({
   infoLabel: { color: "#888888", fontSize: 15 },
   infoValue: { color: "#FFFFFF", fontSize: 15, fontWeight: "500" },
   divider: { height: 1, backgroundColor: "#1A1A1A" },
-  planCard: {
+  themeButton: {
+    backgroundColor: "#141414",
+    borderRadius: 16,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
+    marginBottom: 12,
+    borderWidth: 1,
   },
-  planLabel: { color: "#888888", fontSize: 15 },
-  planBadge: {
-    backgroundColor: "#1A1A1A",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  planBadgePro: { backgroundColor: "#39FF14" },
-  planBadgeText: { color: "#888888", fontWeight: "bold", fontSize: 13 },
-  planBadgeTextPro: { color: "#0D0D0D" },
-  upgradeButton: {
-    width: "100%",
-    backgroundColor: "#39FF14",
-    borderRadius: 10,
-    padding: 12,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  upgradeButtonText: { color: "#0D0D0D", fontWeight: "bold", fontSize: 15 },
+  themeCircle: { width: 20, height: 20, borderRadius: 10, marginRight: 12 },
+  themeButtonText: { color: "#FFFFFF", fontSize: 15, flex: 1 },
+  themeArrow: { color: "#888888", fontSize: 20 },
   logoutButton: {
     backgroundColor: "#1A1A1A",
     borderRadius: 16,
@@ -410,7 +421,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 22,
     fontWeight: "bold",
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: "center",
   },
   modalMessage: {
@@ -419,6 +430,28 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 24,
     lineHeight: 22,
+  },
+  themeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  themeOption: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 2,
+    width: "45%",
+  },
+  themeOptionSelected: { backgroundColor: "#1A1A1A" },
+  themeColorDot: { width: 28, height: 28, borderRadius: 14, marginBottom: 6 },
+  themeOptionText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "bold",
+    textAlign: "center",
   },
   modalDeleteButton: {
     backgroundColor: "#FF4444",
@@ -434,7 +467,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#888888",
+    borderColor: "#333333",
   },
   modalCancelText: { color: "#FFFFFF", fontSize: 16 },
 });
