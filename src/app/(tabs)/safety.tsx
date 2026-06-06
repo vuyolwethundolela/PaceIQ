@@ -11,6 +11,19 @@ import {
 } from "react-native";
 import { supabase } from "../../lib/supabase";
 
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export default function SafetyScreen() {
   const [location, setLocation] = useState<any>(null);
   const [nearbyRunners, setNearbyRunners] = useState<any[]>([]);
@@ -23,6 +36,9 @@ export default function SafetyScreen() {
   const [areaName, setAreaName] = useState("");
   const [areaDescription, setAreaDescription] = useState("");
   const [areaSeverity, setAreaSeverity] = useState("medium");
+  const [useCurrentLocation, setUseCurrentLocation] = useState(true);
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
   const [isSharing, setIsSharing] = useState(false);
   const [loading, setLoading] = useState(false);
   const locationWatcher = useRef<any>(null);
@@ -30,10 +46,23 @@ export default function SafetyScreen() {
 
   useEffect(() => {
     loadData();
+    getCurrentLocation();
     return () => {
       stopSharing();
     };
   }, []);
+
+  async function getCurrentLocation() {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setLocation(loc.coords);
+      }
+    } catch (e) {}
+  }
 
   async function loadData() {
     await loadEmergencyContacts();
@@ -58,7 +87,24 @@ export default function SafetyScreen() {
       .from("unsafe_areas")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setUnsafeAreas(data);
+    if (data) {
+      if (location) {
+        const sorted = data
+          .map((area) => ({
+            ...area,
+            distance: getDistanceKm(
+              location.latitude,
+              location.longitude,
+              area.latitude,
+              area.longitude,
+            ),
+          }))
+          .sort((a, b) => a.distance - b.distance);
+        setUnsafeAreas(sorted);
+      } else {
+        setUnsafeAreas(data);
+      }
+    }
   }
 
   async function loadNearbyRunners() {
@@ -94,9 +140,7 @@ export default function SafetyScreen() {
         locationText = `https://maps.google.com/?q=${loc.coords.latitude},${loc.coords.longitude}`;
         setLocation(loc.coords);
       }
-    } catch (e) {
-      console.log("Location error:", e);
-    }
+    } catch (e) {}
 
     const message = encodeURIComponent(
       `🆘 EMERGENCY SOS!\n\n` +
@@ -158,11 +202,9 @@ export default function SafetyScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("emergency_contacts").insert({
-      user_id: user.id,
-      name: contactName,
-      phone: contactPhone,
-    });
+    await supabase
+      .from("emergency_contacts")
+      .insert({ user_id: user.id, name: contactName, phone: contactPhone });
     setContactName("");
     setContactPhone("");
     setShowAddContact(false);
@@ -176,21 +218,45 @@ export default function SafetyScreen() {
   }
 
   async function reportUnsafeArea() {
-    if (!areaName || !location) return;
+    if (!areaName) return;
     setLoading(true);
+
+    let lat = location?.latitude;
+    let lng = location?.longitude;
+
+    if (!useCurrentLocation) {
+      lat = parseFloat(manualLat);
+      lng = parseFloat(manualLng);
+      if (isNaN(lat) || isNaN(lng)) {
+        alert("Please enter valid coordinates");
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!lat || !lng) {
+      alert(
+        "Location not available. Please enable location or enter coordinates manually.",
+      );
+      setLoading(false);
+      return;
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
     await supabase.from("unsafe_areas").insert({
       name: areaName,
       description: areaDescription,
-      latitude: location.latitude,
-      longitude: location.longitude,
+      latitude: lat,
+      longitude: lng,
       severity: areaSeverity,
       reported_by: user?.id,
     });
     setAreaName("");
     setAreaDescription("");
+    setManualLat("");
+    setManualLng("");
     setShowReportArea(false);
     await loadUnsafeAreas();
     setLoading(false);
@@ -201,6 +267,18 @@ export default function SafetyScreen() {
     if (severity === "medium") return "#FFA500";
     return "#FFD700";
   }
+
+  const nearbyUnsafeAreas = location
+    ? unsafeAreas.filter(
+        (a) =>
+          getDistanceKm(
+            location.latitude,
+            location.longitude,
+            a.latitude,
+            a.longitude,
+          ) <= 5,
+      )
+    : unsafeAreas;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -265,16 +343,17 @@ export default function SafetyScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>
-            Unsafe Areas ({unsafeAreas.length})
+            Unsafe Areas {location ? "(within 5km)" : ""} (
+            {nearbyUnsafeAreas.length})
           </Text>
           <TouchableOpacity onPress={() => setShowReportArea(true)}>
             <Text style={styles.addButton}>+ Report</Text>
           </TouchableOpacity>
         </View>
-        {unsafeAreas.length === 0 ? (
-          <Text style={styles.emptyText}>No unsafe areas reported yet</Text>
+        {nearbyUnsafeAreas.length === 0 ? (
+          <Text style={styles.emptyText}>No unsafe areas reported nearby</Text>
         ) : (
-          unsafeAreas.slice(0, 5).map((area) => (
+          nearbyUnsafeAreas.slice(0, 8).map((area) => (
             <View key={area.id} style={styles.areaRow}>
               <View
                 style={[
@@ -291,9 +370,20 @@ export default function SafetyScreen() {
                 {area.description && (
                   <Text style={styles.areaDesc}>{area.description}</Text>
                 )}
+                {area.distance !== undefined && (
+                  <Text style={styles.areaDistance}>
+                    {area.distance.toFixed(1)} km away
+                  </Text>
+                )}
               </View>
             </View>
           ))
+        )}
+        {unsafeAreas.length > nearbyUnsafeAreas.length && (
+          <Text style={styles.moreAreasText}>
+            + {unsafeAreas.length - nearbyUnsafeAreas.length} more areas outside
+            5km radius
+          </Text>
         )}
       </View>
 
@@ -336,7 +426,7 @@ export default function SafetyScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Phone (e.g. 0658938239 or +27658938239)"
+              placeholder="Phone (e.g. 0658938239)"
               placeholderTextColor="#888888"
               value={contactPhone}
               onChangeText={setContactPhone}
@@ -363,70 +453,136 @@ export default function SafetyScreen() {
 
       <Modal visible={showReportArea} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Report Unsafe Area</Text>
-            {!location && (
-              <Text style={styles.warningText}>
-                Start sharing location first to report an area at your current
-                position
-              </Text>
-            )}
-            <TextInput
-              style={styles.input}
-              placeholder="Area Name (e.g. Park near Main St)"
-              placeholderTextColor="#888888"
-              value={areaName}
-              onChangeText={setAreaName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Description (optional)"
-              placeholderTextColor="#888888"
-              value={areaDescription}
-              onChangeText={setAreaDescription}
-              multiline
-            />
-            <Text style={styles.severityLabel}>Severity</Text>
-            <View style={styles.severityRow}>
-              {["low", "medium", "high"].map((s) => (
+          <ScrollView contentContainerStyle={styles.modalScroll}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Report Unsafe Area</Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Area Name (e.g. Park near Main St)"
+                placeholderTextColor="#888888"
+                value={areaName}
+                onChangeText={setAreaName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Description (optional)"
+                placeholderTextColor="#888888"
+                value={areaDescription}
+                onChangeText={setAreaDescription}
+                multiline
+              />
+
+              <Text style={styles.severityLabel}>Severity</Text>
+              <View style={styles.severityRow}>
+                {["low", "medium", "high"].map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.severityBtn,
+                      areaSeverity === s && styles.severityBtnSelected,
+                    ]}
+                    onPress={() => setAreaSeverity(s)}
+                  >
+                    <Text
+                      style={[
+                        styles.severityBtnText,
+                        areaSeverity === s && styles.severityBtnTextSelected,
+                      ]}
+                    >
+                      {s.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.severityLabel}>Location</Text>
+              <View style={styles.locationToggle}>
                 <TouchableOpacity
-                  key={s}
                   style={[
-                    styles.severityBtn,
-                    areaSeverity === s && styles.severityBtnSelected,
+                    styles.locationBtn,
+                    useCurrentLocation && styles.locationBtnSelected,
                   ]}
-                  onPress={() => setAreaSeverity(s)}
+                  onPress={() => setUseCurrentLocation(true)}
                 >
                   <Text
                     style={[
-                      styles.severityBtnText,
-                      areaSeverity === s && styles.severityBtnTextSelected,
+                      styles.locationBtnText,
+                      useCurrentLocation && styles.locationBtnTextSelected,
                     ]}
                   >
-                    {s.toUpperCase()}
+                    📍 Use My Current Location
                   </Text>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity
+                  style={[
+                    styles.locationBtn,
+                    !useCurrentLocation && styles.locationBtnSelected,
+                  ]}
+                  onPress={() => setUseCurrentLocation(false)}
+                >
+                  <Text
+                    style={[
+                      styles.locationBtnText,
+                      !useCurrentLocation && styles.locationBtnTextSelected,
+                    ]}
+                  >
+                    ✏️ Enter Coordinates
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {useCurrentLocation ? (
+                <View style={styles.currentLocBox}>
+                  {location ? (
+                    <Text style={styles.currentLocText}>
+                      ✅ Location: {location.latitude.toFixed(4)},{" "}
+                      {location.longitude.toFixed(4)}
+                    </Text>
+                  ) : (
+                    <Text style={styles.warningText}>
+                      ⚠️ Getting your location...
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Latitude (e.g. -26.2041)"
+                    placeholderTextColor="#888888"
+                    value={manualLat}
+                    onChangeText={setManualLat}
+                    keyboardType="numeric"
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Longitude (e.g. 28.0473)"
+                    placeholderTextColor="#888888"
+                    value={manualLng}
+                    onChangeText={setManualLng}
+                    keyboardType="numeric"
+                  />
+                </>
+              )}
+
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={reportUnsafeArea}
+                disabled={loading}
+              >
+                <Text style={styles.modalButtonText}>
+                  {loading ? "Reporting..." : "Report Area"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowReportArea(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[
-                styles.modalButton,
-                !location && styles.modalButtonDisabled,
-              ]}
-              onPress={reportUnsafeArea}
-              disabled={!location || loading}
-            >
-              <Text style={styles.modalButtonText}>
-                {loading ? "Reporting..." : "Report Area"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalCancelButton}
-              onPress={() => setShowReportArea(false)}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </ScrollView>
@@ -504,17 +660,29 @@ const styles = StyleSheet.create({
   refreshButton: { marginTop: 8, alignItems: "center" },
   refreshText: { color: "#39FF14", fontSize: 13 },
   addButton: { color: "#39FF14", fontSize: 14, fontWeight: "bold" },
-  areaRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8 },
+  areaRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+  },
   severityBadge: {
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
     marginRight: 10,
+    marginTop: 2,
   },
   severityText: { color: "#0D0D0D", fontSize: 10, fontWeight: "bold" },
   areaInfo: { flex: 1 },
   areaName: { color: "#FFFFFF", fontSize: 14, fontWeight: "bold" },
   areaDesc: { color: "#888888", fontSize: 12, marginTop: 2 },
+  areaDistance: { color: "#39FF14", fontSize: 11, marginTop: 2 },
+  moreAreasText: {
+    color: "#888888",
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 8,
+  },
   contactRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -527,16 +695,17 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
-    alignItems: "center",
     justifyContent: "center",
     padding: 24,
   },
+  modalScroll: { justifyContent: "center" },
   modalBox: {
     backgroundColor: "#141414",
     borderRadius: 20,
     padding: 24,
     width: "100%",
     maxWidth: 400,
+    alignSelf: "center",
   },
   modalTitle: {
     color: "#FFFFFF",
@@ -579,6 +748,25 @@ const styles = StyleSheet.create({
   severityBtnSelected: { backgroundColor: "#39FF14", borderColor: "#39FF14" },
   severityBtnText: { color: "#888888", fontWeight: "bold", fontSize: 12 },
   severityBtnTextSelected: { color: "#0D0D0D" },
+  locationToggle: { gap: 8, marginBottom: 12 },
+  locationBtn: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  locationBtnSelected: { backgroundColor: "#39FF14", borderColor: "#39FF14" },
+  locationBtnText: { color: "#888888", fontSize: 13, fontWeight: "bold" },
+  locationBtnTextSelected: { color: "#0D0D0D" },
+  currentLocBox: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  currentLocText: { color: "#39FF14", fontSize: 13 },
   modalButton: {
     backgroundColor: "#39FF14",
     borderRadius: 12,
@@ -586,7 +774,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
-  modalButtonDisabled: { opacity: 0.5 },
   modalButtonText: { color: "#0D0D0D", fontSize: 16, fontWeight: "bold" },
   modalCancelButton: {
     backgroundColor: "#1A1A1A",

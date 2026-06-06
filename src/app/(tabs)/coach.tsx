@@ -1,6 +1,7 @@
 import * as Speech from "expo-speech";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,59 +13,102 @@ import {
 } from "react-native";
 import { supabase } from "../../lib/supabase";
 
+const SYSTEM_PROMPT = `You are PaceIQ, an expert AI running coach and fitness advisor. You are friendly, motivating, and specific. You help runners with:
+- Training plans and pace advice
+- Nutrition and diet for runners
+- Recovery and injury prevention  
+- Motivation and mental coaching
+- Race preparation strategies
+- Weight management through running
+- General fitness and health advice
+
+When you notice a runner's pace is slowing down based on their data, proactively motivate them and suggest reasons why. Always be encouraging. Keep responses concise but helpful — under 200 words unless a detailed plan is requested.`;
+
 export default function CoachScreen() {
   const [messages, setMessages] = useState<any[]>([
     {
       role: "assistant",
       content:
-        "Hi! I am your PaceIQ AI Coach. Ask me anything about your training, pace, recovery, or nutrition!",
+        "Hi! I am your PaceIQ AI Coach! 💪 I can help you with training plans, nutrition, pace advice, motivation, and anything fitness related. What would you like to work on today?",
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const [isPro] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
+  const [recentRuns, setRecentRuns] = useState<any[]>([]);
   const scrollRef = useRef<any>(null);
 
-  async function speakText(text: string) {
-    if (isSpeaking) {
+  useEffect(() => {
+    loadUserContext();
+  }, []);
+
+  async function loadUserContext() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: p } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    const { data: r } = await supabase
+      .from("runs")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(5);
+    setProfile(p);
+    setRecentRuns(r || []);
+  }
+
+  async function speakText(text: string, index: number) {
+    if (isSpeaking && speakingIndex === index) {
       Speech.stop();
       setIsSpeaking(false);
+      setSpeakingIndex(null);
       return;
     }
+    Speech.stop();
     setIsSpeaking(true);
+    setSpeakingIndex(index);
     Speech.speak(text, {
       language: "en-US",
       pitch: 1.0,
       rate: 0.9,
-      onDone: () => setIsSpeaking(false),
-      onError: () => setIsSpeaking(false),
+      onDone: () => {
+        setIsSpeaking(false);
+        setSpeakingIndex(null);
+      },
+      onError: () => {
+        setIsSpeaking(false);
+        setSpeakingIndex(null);
+      },
     });
   }
 
   async function sendMessage() {
-    if (!input.trim() || loading || !isPro) return;
+    if (!input.trim() || loading) return;
 
     const userMessage = { role: "user", content: input.trim() };
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", user?.id)
-        .single();
-      const { data: runs } = await supabase
-        .from("runs")
-        .select("*")
-        .eq("user_id", user?.id)
-        .order("date", { ascending: false })
-        .limit(5);
+      const contextPrompt = `${SYSTEM_PROMPT}
+
+Runner Profile: ${JSON.stringify(profile || {})}
+Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
+
+      const apiMessages = updatedMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -75,35 +119,45 @@ export default function CoachScreen() {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: `You are PaceIQ, a friendly but expert running coach. You speak in clear, encouraging, and specific language. Keep responses under 150 words. Runner profile: ${JSON.stringify(profile)}. Last 5 runs: ${JSON.stringify(runs)}.`,
-          messages: [...messages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          max_tokens: 1024,
+          system: contextPrompt,
+          messages: apiMessages,
         }),
       });
 
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error?.message || "API error");
+      }
+
       const data = await response.json();
       const reply =
-        data.content?.[0]?.text || "Sorry, I could not respond right now.";
+        data.content?.[0]?.text || "Sorry I could not respond right now.";
       const assistantMessage = { role: "assistant", content: reply };
       setMessages((prev) => [...prev, assistantMessage]);
-      speakText(reply);
 
-      await supabase.from("chat_messages").insert([
-        { user_id: user?.id, role: "user", content: userMessage.content },
-        { user_id: user?.id, role: "assistant", content: reply },
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("chat_messages").insert([
+          { user_id: user.id, role: "user", content: userMessage.content },
+          { user_id: user.id, role: "assistant", content: reply },
+        ]);
+      }
+    } catch (error: any) {
+      console.error("Coach error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Sorry, I ran into an issue: ${error.message}. Please check your API key or try again.`,
+        },
       ]);
-    } catch (error) {
-      const errorMsg = {
-        role: "assistant",
-        content: "Sorry, something went wrong. Please try again.",
-      };
-      setMessages((prev) => [...prev, errorMsg]);
     }
+
     setLoading(false);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
   }
 
   return (
@@ -111,7 +165,12 @@ export default function CoachScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text style={styles.pageTitle}>AI Coach</Text>
+      <View style={styles.header}>
+        <Text style={styles.pageTitle}>AI Coach</Text>
+        <View style={styles.proBadge}>
+          <Text style={styles.proBadgeText}>PRO</Text>
+        </View>
+      </View>
 
       <ScrollView
         ref={scrollRef}
@@ -128,6 +187,11 @@ export default function CoachScreen() {
                 : styles.bubbleRowLeft,
             ]}
           >
+            {msg.role === "assistant" && (
+              <View style={styles.coachAvatar}>
+                <Text style={styles.coachAvatarText}>🤖</Text>
+              </View>
+            )}
             <View
               style={[
                 styles.bubble,
@@ -147,10 +211,10 @@ export default function CoachScreen() {
               {msg.role === "assistant" && (
                 <TouchableOpacity
                   style={styles.speakButton}
-                  onPress={() => speakText(msg.content)}
+                  onPress={() => speakText(msg.content, i)}
                 >
                   <Text style={styles.speakButtonText}>
-                    {isSpeaking ? "⏹ Stop" : "🔊 Listen"}
+                    {isSpeaking && speakingIndex === i ? "⏹ Stop" : "🔊 Listen"}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -159,8 +223,11 @@ export default function CoachScreen() {
         ))}
         {loading && (
           <View style={styles.bubbleRowLeft}>
+            <View style={styles.coachAvatar}>
+              <Text style={styles.coachAvatarText}>🤖</Text>
+            </View>
             <View style={styles.assistantBubble}>
-              <Text style={styles.assistantText}>Thinking...</Text>
+              <ActivityIndicator color="#39FF14" size="small" />
             </View>
           </View>
         )}
@@ -169,16 +236,17 @@ export default function CoachScreen() {
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="Ask your coach..."
+          placeholder="Ask your coach anything..."
           placeholderTextColor="#888888"
           value={input}
           onChangeText={setInput}
           multiline
+          onSubmitEditing={sendMessage}
         />
         <TouchableOpacity
           style={[
             styles.sendButton,
-            !input.trim() && styles.sendButtonDisabled,
+            (!input.trim() || loading) && styles.sendButtonDisabled,
           ]}
           onPress={sendMessage}
           disabled={!input.trim() || loading}
@@ -192,22 +260,44 @@ export default function CoachScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0D0D0D" },
-  pageTitle: {
-    color: "#FFFFFF",
-    fontSize: 28,
-    fontWeight: "bold",
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 48,
     marginBottom: 16,
     paddingHorizontal: 20,
   },
-  messagesContainer: { flex: 1, paddingHorizontal: 20 },
-  messages: { paddingVertical: 16 },
-  bubbleRow: { marginBottom: 10 },
-  bubbleRowRight: { alignItems: "flex-end" },
-  bubbleRowLeft: { alignItems: "flex-start" },
-  bubble: { maxWidth: "80%", borderRadius: 16, padding: 14 },
+  pageTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "bold", flex: 1 },
+  proBadge: {
+    backgroundColor: "#39FF14",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  proBadgeText: { color: "#0D0D0D", fontWeight: "bold", fontSize: 13 },
+  messagesContainer: { flex: 1, paddingHorizontal: 16 },
+  messages: { paddingVertical: 16, gap: 12 },
+  bubbleRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  bubbleRowRight: { justifyContent: "flex-end" },
+  bubbleRowLeft: { justifyContent: "flex-start" },
+  coachAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#1A1A1A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coachAvatarText: { fontSize: 18 },
+  bubble: { maxWidth: "75%", borderRadius: 18, padding: 14 },
   userBubble: { backgroundColor: "#39FF14", borderBottomRightRadius: 4 },
-  assistantBubble: { backgroundColor: "#141414", borderBottomLeftRadius: 4 },
+  assistantBubble: {
+    backgroundColor: "#141414",
+    borderBottomLeftRadius: 4,
+    minWidth: 60,
+    minHeight: 44,
+    justifyContent: "center",
+  },
   bubbleText: { fontSize: 15, lineHeight: 22 },
   userText: { color: "#0D0D0D" },
   assistantText: { color: "#FFFFFF" },
@@ -219,6 +309,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#1A1A1A",
     gap: 10,
+    alignItems: "flex-end",
   },
   input: {
     flex: 1,
@@ -227,12 +318,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     fontSize: 15,
-    maxHeight: 100,
+    maxHeight: 120,
+    minHeight: 48,
   },
   sendButton: {
     backgroundColor: "#39FF14",
     borderRadius: 12,
     paddingHorizontal: 20,
+    height: 48,
     justifyContent: "center",
   },
   sendButtonDisabled: { opacity: 0.4 },
