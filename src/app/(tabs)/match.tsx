@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/themeContext";
 
 export default function MatchScreen() {
+  const { primaryColor } = useTheme();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [runners, setRunners] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -52,14 +54,12 @@ export default function MatchScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-
     const { data: profile } = await supabase
       .from("users")
       .select("*")
       .eq("id", user.id)
       .single();
     setCurrentUser(profile);
-
     const { data: myProfile } = await supabase
       .from("runner_profiles")
       .select("*")
@@ -70,13 +70,11 @@ export default function MatchScreen() {
       setPaceRange(myProfile.pace_range || "");
       setPreferredTime(myProfile.preferred_time || "");
     }
-
     const { data: myActions } = await supabase
       .from("runner_matches")
       .select("target_user_id")
       .eq("user_id", user.id);
     const seenIds = myActions?.map((a) => a.target_user_id) || [];
-
     const { data: allRunners } = await supabase
       .from("users")
       .select("*, runner_profiles(*)")
@@ -88,14 +86,12 @@ export default function MatchScreen() {
           ? `(${seenIds.join(",")})`
           : "(00000000-0000-0000-0000-000000000000)",
       );
-
     const visible =
       allRunners?.filter(
         (r) =>
           r.runner_profiles?.length > 0 && r.runner_profiles[0]?.is_visible,
       ) || [];
     setRunners(visible);
-
     await loadMatches(user.id);
     setLoading(false);
   }
@@ -111,7 +107,6 @@ export default function MatchScreen() {
       setMatches([]);
       return;
     }
-
     const { data: theirLikes } = await supabase
       .from("runner_matches")
       .select("user_id")
@@ -123,7 +118,6 @@ export default function MatchScreen() {
       setMatches([]);
       return;
     }
-
     const { data: matchedUsers } = await supabase
       .from("users")
       .select("*")
@@ -156,15 +150,10 @@ export default function MatchScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user || currentIndex >= runners.length) return;
-
     const targetRunner = runners[currentIndex];
-
-    await supabase.from("runner_matches").insert({
-      user_id: user.id,
-      target_user_id: targetRunner.id,
-      action,
-    });
-
+    await supabase
+      .from("runner_matches")
+      .insert({ user_id: user.id, target_user_id: targetRunner.id, action });
     if (action === "like") {
       const { data: theirLike } = await supabase
         .from("runner_matches")
@@ -173,14 +162,12 @@ export default function MatchScreen() {
         .eq("target_user_id", user.id)
         .eq("action", "like")
         .single();
-
       if (theirLike) {
         setMatchedRunner(targetRunner);
         setShowMatch(true);
         await loadMatches(user.id);
       }
     }
-
     setCurrentIndex((prev) => prev + 1);
   }
 
@@ -206,7 +193,7 @@ export default function MatchScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#39FF14" size="large" />
+        <ActivityIndicator color={primaryColor} size="large" />
       </View>
     );
   }
@@ -217,18 +204,20 @@ export default function MatchScreen() {
         <Text style={styles.pageTitle}>Run Dates 🏃</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity
-            style={styles.headerBtn}
+            style={[styles.headerBtn, { borderColor: primaryColor }]}
             onPress={() => setShowMatches(true)}
           >
-            <Text style={styles.headerBtnText}>
+            <Text style={[styles.headerBtnText, { color: primaryColor }]}>
               Matches {matches.length > 0 ? `(${matches.length})` : ""}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.headerBtn}
+            style={[styles.headerBtn, { borderColor: primaryColor }]}
             onPress={() => setShowProfile(true)}
           >
-            <Text style={styles.headerBtnText}>My Profile</Text>
+            <Text style={[styles.headerBtnText, { color: primaryColor }]}>
+              My Profile
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -242,7 +231,7 @@ export default function MatchScreen() {
             Add your bio and pace to start matching with other runners.
           </Text>
           <TouchableOpacity
-            style={styles.setupButton}
+            style={[styles.setupButton, { backgroundColor: primaryColor }]}
             onPress={() => setShowProfile(true)}
           >
             <Text style={styles.setupButtonText}>Set Up Profile</Text>
@@ -259,7 +248,7 @@ export default function MatchScreen() {
             />
           ) : (
             <View style={styles.runnerImagePlaceholder}>
-              <Text style={styles.runnerInitials}>
+              <Text style={[styles.runnerInitials, { color: primaryColor }]}>
                 {currentRunner.name
                   ?.split(" ")
                   .map((n: string) => n[0])
@@ -268,7 +257,6 @@ export default function MatchScreen() {
               </Text>
             </View>
           )}
-
           <View style={styles.runnerInfo}>
             <Text style={styles.runnerName}>
               {currentRunner.name || "Runner"}
@@ -279,14 +267,15 @@ export default function MatchScreen() {
               </Text>
             )}
             {currentRunner.fitness_level && (
-              <View style={styles.levelBadge}>
+              <View
+                style={[styles.levelBadge, { backgroundColor: primaryColor }]}
+              >
                 <Text style={styles.levelText}>
                   {currentRunner.fitness_level}
                 </Text>
               </View>
             )}
           </View>
-
           {currentRunner.runner_profiles?.[0] && (
             <View style={styles.runnerDetails}>
               {currentRunner.runner_profiles[0].bio && (
@@ -317,7 +306,6 @@ export default function MatchScreen() {
               )}
             </View>
           )}
-
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={styles.passButton}
@@ -326,7 +314,7 @@ export default function MatchScreen() {
               <Text style={styles.passButtonText}>✕ Pass</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.likeButton}
+              style={[styles.likeButton, { backgroundColor: primaryColor }]}
               onPress={() => handleAction("like")}
             >
               <Text style={styles.likeButtonText}>♥ Like</Text>
@@ -339,13 +327,15 @@ export default function MatchScreen() {
           <Text style={styles.emptyText}>
             Check back later for new runners in your area.
           </Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
+          <TouchableOpacity
+            style={[styles.refreshButton, { backgroundColor: primaryColor }]}
+            onPress={loadData}
+          >
             <Text style={styles.refreshText}>Refresh</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
-      {/* Edit Profile Modal */}
       <Modal visible={showProfile} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScroll}>
@@ -368,7 +358,10 @@ export default function MatchScreen() {
                     key={p}
                     style={[
                       styles.optionBtn,
-                      paceRange === p && styles.optionBtnSelected,
+                      paceRange === p && {
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor,
+                      },
                     ]}
                     onPress={() => setPaceRange(p)}
                   >
@@ -390,7 +383,10 @@ export default function MatchScreen() {
                     key={t}
                     style={[
                       styles.optionBtn,
-                      preferredTime === t && styles.optionBtnSelected,
+                      preferredTime === t && {
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor,
+                      },
                     ]}
                     onPress={() => setPreferredTime(t)}
                   >
@@ -406,7 +402,7 @@ export default function MatchScreen() {
                 ))}
               </View>
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, { backgroundColor: primaryColor }]}
                 onPress={saveProfile}
                 disabled={saving}
               >
@@ -425,7 +421,6 @@ export default function MatchScreen() {
         </View>
       </Modal>
 
-      {/* Matches Modal */}
       <Modal visible={showMatches} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -443,8 +438,15 @@ export default function MatchScreen() {
                       style={styles.matchAvatar}
                     />
                   ) : (
-                    <View style={styles.matchAvatarPlaceholder}>
-                      <Text style={styles.matchInitials}>
+                    <View
+                      style={[
+                        styles.matchAvatarPlaceholder,
+                        { borderColor: primaryColor },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.matchInitials, { color: primaryColor }]}
+                      >
                         {match.name
                           ?.split(" ")
                           .map((n: string) => n[0])
@@ -478,22 +480,30 @@ export default function MatchScreen() {
         </View>
       </Modal>
 
-      {/* It's a Match Modal */}
       <Modal visible={showMatch} transparent animationType="fade">
         <View style={styles.matchOverlay}>
           <View style={styles.matchBox}>
-            <Text style={styles.matchTitle}>It's a Match! 🎉</Text>
+            <Text style={[styles.matchTitle, { color: primaryColor }]}>
+              It's a Match! 🎉
+            </Text>
             <Text style={styles.matchSubtitle}>
               You and {matchedRunner?.name} both want to run together!
             </Text>
             {matchedRunner?.avatar_url ? (
               <Image
                 source={{ uri: matchedRunner.avatar_url }}
-                style={styles.matchBigAvatar}
+                style={[styles.matchBigAvatar, { borderColor: primaryColor }]}
               />
             ) : (
-              <View style={styles.matchBigAvatarPlaceholder}>
-                <Text style={styles.matchBigInitials}>
+              <View
+                style={[
+                  styles.matchBigAvatarPlaceholder,
+                  { borderColor: primaryColor },
+                ]}
+              >
+                <Text
+                  style={[styles.matchBigInitials, { color: primaryColor }]}
+                >
                   {matchedRunner?.name
                     ?.split(" ")
                     .map((n: string) => n[0])
@@ -550,9 +560,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#39FF14",
   },
-  headerBtnText: { color: "#39FF14", fontSize: 13, fontWeight: "bold" },
+  headerBtnText: { fontSize: 13, fontWeight: "bold" },
   setupCard: {
     backgroundColor: "#141414",
     borderRadius: 16,
@@ -573,12 +582,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
   },
-  setupButton: {
-    backgroundColor: "#39FF14",
-    borderRadius: 10,
-    padding: 14,
-    paddingHorizontal: 24,
-  },
+  setupButton: { borderRadius: 10, padding: 14, paddingHorizontal: 24 },
   setupButtonText: { color: "#0D0D0D", fontWeight: "bold", fontSize: 15 },
   card: {
     backgroundColor: "#141414",
@@ -594,12 +598,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  runnerInitials: { color: "#39FF14", fontSize: 72, fontWeight: "bold" },
+  runnerInitials: { fontSize: 72, fontWeight: "bold" },
   runnerInfo: { padding: 16, paddingBottom: 8 },
   runnerName: { color: "#FFFFFF", fontSize: 24, fontWeight: "bold" },
   runnerAge: { color: "#888888", fontSize: 15, marginTop: 2 },
   levelBadge: {
-    backgroundColor: "#39FF14",
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -634,13 +637,7 @@ const styles = StyleSheet.create({
     borderColor: "#FF4444",
   },
   passButtonText: { color: "#FF4444", fontSize: 16, fontWeight: "bold" },
-  likeButton: {
-    flex: 1,
-    backgroundColor: "#39FF14",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
+  likeButton: { flex: 1, borderRadius: 12, padding: 16, alignItems: "center" },
   likeButtonText: { color: "#0D0D0D", fontSize: 16, fontWeight: "bold" },
   emptyCard: {
     backgroundColor: "#141414",
@@ -660,12 +657,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
   },
-  refreshButton: {
-    backgroundColor: "#39FF14",
-    borderRadius: 10,
-    padding: 12,
-    paddingHorizontal: 24,
-  },
+  refreshButton: { borderRadius: 10, padding: 12, paddingHorizontal: 24 },
   refreshText: { color: "#0D0D0D", fontWeight: "bold" },
   modalOverlay: {
     flex: 1,
@@ -715,11 +707,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333333",
   },
-  optionBtnSelected: { backgroundColor: "#39FF14", borderColor: "#39FF14" },
   optionText: { color: "#888888", fontSize: 13, fontWeight: "bold" },
   optionTextSelected: { color: "#0D0D0D" },
   saveButton: {
-    backgroundColor: "#39FF14",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
@@ -752,9 +742,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
     borderWidth: 2,
-    borderColor: "#39FF14",
   },
-  matchInitials: { color: "#39FF14", fontSize: 16, fontWeight: "bold" },
+  matchInitials: { fontSize: 16, fontWeight: "bold" },
   matchInfo: { flex: 1 },
   matchName: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
   matchLevel: { color: "#888888", fontSize: 13 },
@@ -780,12 +769,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
   },
-  matchTitle: {
-    color: "#39FF14",
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
+  matchTitle: { fontSize: 32, fontWeight: "bold", marginBottom: 8 },
   matchSubtitle: {
     color: "#888888",
     fontSize: 16,
@@ -798,7 +782,6 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     marginBottom: 24,
     borderWidth: 3,
-    borderColor: "#39FF14",
   },
   matchBigAvatarPlaceholder: {
     width: 120,
@@ -809,9 +792,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 24,
     borderWidth: 3,
-    borderColor: "#39FF14",
   },
-  matchBigInitials: { color: "#39FF14", fontSize: 40, fontWeight: "bold" },
+  matchBigInitials: { fontSize: 40, fontWeight: "bold" },
   whatsappButton: {
     backgroundColor: "#25D366",
     borderRadius: 12,

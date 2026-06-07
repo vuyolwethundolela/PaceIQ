@@ -1,6 +1,9 @@
 import { Tabs } from "expo-router";
+import { useTheme } from "../../lib/themeContext";
 
 export default function TabLayout() {
+  const { primaryColor } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
@@ -8,9 +11,13 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: "#1A1A1A",
           borderTopColor: "#1A1A1A",
+          height: 60,
+          paddingBottom: 8,
         },
-        tabBarActiveTintColor: "#39FF14",
+        tabBarActiveTintColor: primaryColor,
         tabBarInactiveTintColor: "#888888",
+        tabBarLabelStyle: { fontSize: 13, fontWeight: "bold" },
+        tabBarShowIcon: false,
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />

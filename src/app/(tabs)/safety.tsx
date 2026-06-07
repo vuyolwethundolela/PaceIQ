@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/themeContext";
 
 function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -25,6 +26,7 @@ function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export default function SafetyScreen() {
+  const { primaryColor } = useTheme();
   const [location, setLocation] = useState<any>(null);
   const [nearbyRunners, setNearbyRunners] = useState<any[]>([]);
   const [unsafeAreas, setUnsafeAreas] = useState<any[]>([]);
@@ -129,7 +131,6 @@ export default function SafetyScreen() {
       .eq("id", user?.id)
       .single();
     const userName = profile?.name || "A PaceIQ Runner";
-
     let locationText = "Location not available";
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -141,13 +142,8 @@ export default function SafetyScreen() {
         setLocation(loc.coords);
       }
     } catch (e) {}
-
     const message = encodeURIComponent(
-      `🆘 EMERGENCY SOS!\n\n` +
-        `${userName} needs immediate help!\n\n` +
-        `📍 Last known location:\n${locationText}\n\n` +
-        `Please call or go to their location immediately!\n\n` +
-        `Sent via PaceIQ Safety`,
+      `🆘 EMERGENCY SOS!\n\n${userName} needs immediate help!\n\n📍 Last known location:\n${locationText}\n\nPlease call or go to their location immediately!\n\nSent via PaceIQ Safety`,
     );
     let phone = emergencyContacts[0].phone.replace(/\D/g, "");
     if (phone.startsWith("0")) phone = "27" + phone.substring(1);
@@ -220,10 +216,8 @@ export default function SafetyScreen() {
   async function reportUnsafeArea() {
     if (!areaName) return;
     setLoading(true);
-
     let lat = location?.latitude;
     let lng = location?.longitude;
-
     if (!useCurrentLocation) {
       lat = parseFloat(manualLat);
       lng = parseFloat(manualLng);
@@ -233,7 +227,6 @@ export default function SafetyScreen() {
         return;
       }
     }
-
     if (!lat || !lng) {
       alert(
         "Location not available. Please enable location or enter coordinates manually.",
@@ -241,7 +234,6 @@ export default function SafetyScreen() {
       setLoading(false);
       return;
     }
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -300,7 +292,7 @@ export default function SafetyScreen() {
           <View
             style={[
               styles.statusDot,
-              isSharing ? styles.dotActive : styles.dotInactive,
+              { backgroundColor: isSharing ? primaryColor : "#888888" },
             ]}
           />
           <Text style={styles.statusText}>
@@ -308,7 +300,10 @@ export default function SafetyScreen() {
           </Text>
         </View>
         <TouchableOpacity
-          style={[styles.shareButton, isSharing && styles.shareButtonActive]}
+          style={[
+            styles.shareButton,
+            { backgroundColor: isSharing ? "#FF4444" : primaryColor },
+          ]}
           onPress={isSharing ? stopSharing : startSharing}
         >
           <Text style={styles.shareButtonText}>
@@ -326,7 +321,9 @@ export default function SafetyScreen() {
         ) : (
           nearbyRunners.map((runner, i) => (
             <View key={runner.id} style={styles.runnerRow}>
-              <View style={styles.runnerDot} />
+              <View
+                style={[styles.runnerDot, { backgroundColor: primaryColor }]}
+              />
               <Text style={styles.runnerText}>Runner {i + 1}</Text>
               <Text style={styles.runnerDistance}>Nearby</Text>
             </View>
@@ -336,7 +333,9 @@ export default function SafetyScreen() {
           style={styles.refreshButton}
           onPress={loadNearbyRunners}
         >
-          <Text style={styles.refreshText}>Refresh</Text>
+          <Text style={[styles.refreshText, { color: primaryColor }]}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -347,7 +346,9 @@ export default function SafetyScreen() {
             {nearbyUnsafeAreas.length})
           </Text>
           <TouchableOpacity onPress={() => setShowReportArea(true)}>
-            <Text style={styles.addButton}>+ Report</Text>
+            <Text style={[styles.addButton, { color: primaryColor }]}>
+              + Report
+            </Text>
           </TouchableOpacity>
         </View>
         {nearbyUnsafeAreas.length === 0 ? (
@@ -371,7 +372,7 @@ export default function SafetyScreen() {
                   <Text style={styles.areaDesc}>{area.description}</Text>
                 )}
                 {area.distance !== undefined && (
-                  <Text style={styles.areaDistance}>
+                  <Text style={[styles.areaDistance, { color: primaryColor }]}>
                     {area.distance.toFixed(1)} km away
                   </Text>
                 )}
@@ -391,7 +392,9 @@ export default function SafetyScreen() {
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Emergency Contacts</Text>
           <TouchableOpacity onPress={() => setShowAddContact(true)}>
-            <Text style={styles.addButton}>+ Add</Text>
+            <Text style={[styles.addButton, { color: primaryColor }]}>
+              + Add
+            </Text>
           </TouchableOpacity>
         </View>
         {emergencyContacts.length === 0 ? (
@@ -433,7 +436,7 @@ export default function SafetyScreen() {
               keyboardType="phone-pad"
             />
             <TouchableOpacity
-              style={styles.modalButton}
+              style={[styles.modalButton, { backgroundColor: primaryColor }]}
               onPress={addEmergencyContact}
               disabled={loading}
             >
@@ -456,7 +459,6 @@ export default function SafetyScreen() {
           <ScrollView contentContainerStyle={styles.modalScroll}>
             <View style={styles.modalBox}>
               <Text style={styles.modalTitle}>Report Unsafe Area</Text>
-
               <TextInput
                 style={styles.input}
                 placeholder="Area Name (e.g. Park near Main St)"
@@ -472,7 +474,6 @@ export default function SafetyScreen() {
                 onChangeText={setAreaDescription}
                 multiline
               />
-
               <Text style={styles.severityLabel}>Severity</Text>
               <View style={styles.severityRow}>
                 {["low", "medium", "high"].map((s) => (
@@ -480,7 +481,10 @@ export default function SafetyScreen() {
                     key={s}
                     style={[
                       styles.severityBtn,
-                      areaSeverity === s && styles.severityBtnSelected,
+                      areaSeverity === s && {
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor,
+                      },
                     ]}
                     onPress={() => setAreaSeverity(s)}
                   >
@@ -495,13 +499,15 @@ export default function SafetyScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-
               <Text style={styles.severityLabel}>Location</Text>
               <View style={styles.locationToggle}>
                 <TouchableOpacity
                   style={[
                     styles.locationBtn,
-                    useCurrentLocation && styles.locationBtnSelected,
+                    useCurrentLocation && {
+                      backgroundColor: primaryColor,
+                      borderColor: primaryColor,
+                    },
                   ]}
                   onPress={() => setUseCurrentLocation(true)}
                 >
@@ -517,7 +523,10 @@ export default function SafetyScreen() {
                 <TouchableOpacity
                   style={[
                     styles.locationBtn,
-                    !useCurrentLocation && styles.locationBtnSelected,
+                    !useCurrentLocation && {
+                      backgroundColor: primaryColor,
+                      borderColor: primaryColor,
+                    },
                   ]}
                   onPress={() => setUseCurrentLocation(false)}
                 >
@@ -531,11 +540,12 @@ export default function SafetyScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-
               {useCurrentLocation ? (
                 <View style={styles.currentLocBox}>
                   {location ? (
-                    <Text style={styles.currentLocText}>
+                    <Text
+                      style={[styles.currentLocText, { color: primaryColor }]}
+                    >
                       ✅ Location: {location.latitude.toFixed(4)},{" "}
                       {location.longitude.toFixed(4)}
                     </Text>
@@ -565,9 +575,8 @@ export default function SafetyScreen() {
                   />
                 </>
               )}
-
               <TouchableOpacity
-                style={styles.modalButton}
+                style={[styles.modalButton, { backgroundColor: primaryColor }]}
                 onPress={reportUnsafeArea}
                 disabled={loading}
               >
@@ -630,16 +639,8 @@ const styles = StyleSheet.create({
   cardDesc: { color: "#888888", fontSize: 13, marginBottom: 12 },
   statusRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
-  dotActive: { backgroundColor: "#39FF14" },
-  dotInactive: { backgroundColor: "#888888" },
   statusText: { color: "#FFFFFF", fontSize: 14 },
-  shareButton: {
-    backgroundColor: "#39FF14",
-    borderRadius: 10,
-    padding: 14,
-    alignItems: "center",
-  },
-  shareButtonActive: { backgroundColor: "#FF4444" },
+  shareButton: { borderRadius: 10, padding: 14, alignItems: "center" },
   shareButtonText: { color: "#0D0D0D", fontWeight: "bold", fontSize: 15 },
   emptyText: {
     color: "#888888",
@@ -648,18 +649,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   runnerRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8 },
-  runnerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#39FF14",
-    marginRight: 10,
-  },
+  runnerDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
   runnerText: { color: "#FFFFFF", fontSize: 14, flex: 1 },
   runnerDistance: { color: "#888888", fontSize: 13 },
   refreshButton: { marginTop: 8, alignItems: "center" },
-  refreshText: { color: "#39FF14", fontSize: 13 },
-  addButton: { color: "#39FF14", fontSize: 14, fontWeight: "bold" },
+  refreshText: { fontSize: 13 },
+  addButton: { fontSize: 14, fontWeight: "bold" },
   areaRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -676,7 +671,7 @@ const styles = StyleSheet.create({
   areaInfo: { flex: 1 },
   areaName: { color: "#FFFFFF", fontSize: 14, fontWeight: "bold" },
   areaDesc: { color: "#888888", fontSize: 12, marginTop: 2 },
-  areaDistance: { color: "#39FF14", fontSize: 11, marginTop: 2 },
+  areaDistance: { fontSize: 11, marginTop: 2 },
   moreAreasText: {
     color: "#888888",
     fontSize: 12,
@@ -745,7 +740,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333333",
   },
-  severityBtnSelected: { backgroundColor: "#39FF14", borderColor: "#39FF14" },
   severityBtnText: { color: "#888888", fontWeight: "bold", fontSize: 12 },
   severityBtnTextSelected: { color: "#0D0D0D" },
   locationToggle: { gap: 8, marginBottom: 12 },
@@ -757,7 +751,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333333",
   },
-  locationBtnSelected: { backgroundColor: "#39FF14", borderColor: "#39FF14" },
   locationBtnText: { color: "#888888", fontSize: 13, fontWeight: "bold" },
   locationBtnTextSelected: { color: "#0D0D0D" },
   currentLocBox: {
@@ -766,9 +759,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-  currentLocText: { color: "#39FF14", fontSize: 13 },
+  currentLocText: { fontSize: 13 },
   modalButton: {
-    backgroundColor: "#39FF14",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
