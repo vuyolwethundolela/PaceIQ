@@ -9,9 +9,11 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/themeContext";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { primaryColor } = useTheme();
   const [userName, setUserName] = useState("Runner");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [weeklyKm, setWeeklyKm] = useState(0);
@@ -27,32 +29,26 @@ export default function HomeScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-
     const { data: profile } = await supabase
       .from("users")
       .select("name, weekly_goal_km, avatar_url")
       .eq("id", user.id)
       .single();
-
     if (profile) {
       setUserName(profile.name?.split(" ")[0] || "Runner");
       setWeeklyGoal(profile.weekly_goal_km || 20);
       setAvatarUrl(profile.avatar_url || null);
     }
-
     const { data: runs } = await supabase
       .from("runs")
       .select("*")
       .eq("user_id", user.id)
       .order("date", { ascending: false })
       .limit(3);
-
     if (runs) setRecentRuns(runs);
-
     const { data: weekData } = await supabase.rpc("get_weekly_km", {
       p_user_id: user.id,
     });
-
     if (weekData) setWeeklyKm(weekData);
   }
 
@@ -86,15 +82,17 @@ export default function HomeScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>{getGreeting()},</Text>
+          <Text style={styles.greeting}>Good morning,</Text>
           <Text style={styles.name}>{userName}</Text>
         </View>
-        <View style={styles.avatarWrapper}>
+        <View style={[styles.avatarWrapper, { borderColor: primaryColor }]}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+              <Text style={[styles.avatarInitials, { color: primaryColor }]}>
+                {initials}
+              </Text>
             </View>
           )}
         </View>
@@ -103,11 +101,18 @@ export default function HomeScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Weekly Progress</Text>
         <View style={styles.progressRow}>
-          <Text style={styles.progressKm}>{weeklyKm.toFixed(1)} km</Text>
+          <Text style={[styles.progressKm, { color: primaryColor }]}>
+            {weeklyKm.toFixed(1)} km
+          </Text>
           <Text style={styles.progressGoal}>/ {weeklyGoal} km goal</Text>
         </View>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress}%`, backgroundColor: primaryColor },
+            ]}
+          />
         </View>
         <Text style={styles.progressPercent}>
           {Math.round(progress)}% complete
@@ -123,7 +128,7 @@ export default function HomeScreen() {
       </View>
 
       <TouchableOpacity
-        style={styles.startButton}
+        style={[styles.startButton, { backgroundColor: primaryColor }]}
         onPress={() => router.push("/(tabs)/run")}
       >
         <Text style={styles.startButtonText}>Start Run</Text>
@@ -148,7 +153,7 @@ export default function HomeScreen() {
               <Text style={styles.runStat}>
                 {formatDuration(run.duration_seconds)}
               </Text>
-              <Text style={styles.runPace}>
+              <Text style={[styles.runPace, { color: primaryColor }]}>
                 {formatPace(run.avg_pace_sec_per_km)}
               </Text>
             </View>
@@ -157,12 +162,14 @@ export default function HomeScreen() {
       )}
 
       <TouchableOpacity
-        style={styles.coachButton}
+        style={[styles.coachButton, { backgroundColor: primaryColor }]}
         onPress={() => router.push("/(tabs)/coach")}
       >
         <Text style={styles.coachButtonText}>Ask your Coach</Text>
         <View style={styles.proBadge}>
-          <Text style={styles.proBadgeText}>PRO</Text>
+          <Text style={[styles.proBadgeText, { color: primaryColor }]}>
+            PRO
+          </Text>
         </View>
       </TouchableOpacity>
     </ScrollView>
@@ -186,7 +193,6 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     borderWidth: 2,
-    borderColor: "#39FF14",
     overflow: "hidden",
   },
   avatar: { width: 52, height: 52, borderRadius: 26 },
@@ -198,7 +204,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInitials: { color: "#39FF14", fontSize: 20, fontWeight: "bold" },
+  avatarInitials: { fontSize: 20, fontWeight: "bold" },
   card: {
     backgroundColor: "#141414",
     borderRadius: 16,
@@ -217,7 +223,7 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
     marginBottom: 8,
   },
-  progressKm: { color: "#39FF14", fontSize: 28, fontWeight: "bold" },
+  progressKm: { fontSize: 28, fontWeight: "bold" },
   progressGoal: { color: "#888888", fontSize: 14, marginLeft: 6 },
   progressBar: {
     height: 8,
@@ -225,7 +231,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginBottom: 6,
   },
-  progressFill: { height: 8, backgroundColor: "#39FF14", borderRadius: 4 },
+  progressFill: { height: 8, borderRadius: 4 },
   progressPercent: { color: "#888888", fontSize: 12 },
   workoutText: {
     color: "#FFFFFF",
@@ -235,7 +241,6 @@ const styles = StyleSheet.create({
   },
   workoutSub: { color: "#888888", fontSize: 13 },
   startButton: {
-    backgroundColor: "#39FF14",
     borderRadius: 16,
     padding: 18,
     alignItems: "center",
@@ -270,9 +275,8 @@ const styles = StyleSheet.create({
   runDistance: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
   runRight: { alignItems: "flex-end" },
   runStat: { color: "#FFFFFF", fontSize: 14 },
-  runPace: { color: "#39FF14", fontSize: 13 },
+  runPace: { fontSize: 13 },
   coachButton: {
-    backgroundColor: "#39FF14",
     borderRadius: 16,
     padding: 16,
     flexDirection: "row",
@@ -293,5 +297,5 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginLeft: 8,
   },
-  proBadgeText: { color: "#39FF14", fontSize: 11, fontWeight: "bold" },
+  proBadgeText: { fontSize: 11, fontWeight: "bold" },
 });

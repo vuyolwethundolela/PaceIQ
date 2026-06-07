@@ -7,8 +7,10 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/themeContext";
 
 export default function StatsScreen() {
+  const { primaryColor } = useTheme();
   const [runs, setRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalKm, setTotalKm] = useState(0);
@@ -27,13 +29,11 @@ export default function StatsScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-
     const { data: runsData } = await supabase
       .from("runs")
       .select("*")
       .eq("user_id", user.id)
       .order("date", { ascending: false });
-
     if (runsData) {
       setRuns(runsData);
       setTotalRuns(runsData.length);
@@ -42,14 +42,13 @@ export default function StatsScreen() {
       const cal = runsData.reduce((sum, r) => sum + (r.calories || 0), 0);
       setTotalCalories(cal);
       const paces = runsData.filter((r) => r.avg_pace_sec_per_km > 0);
-      if (paces.length > 0) {
+      if (paces.length > 0)
         setAvgPace(
           Math.round(
             paces.reduce((sum, r) => sum + r.avg_pace_sec_per_km, 0) /
               paces.length,
           ),
         );
-      }
       buildMonthlyData(runsData);
       buildPersonalBests(runsData);
     }
@@ -125,7 +124,7 @@ export default function StatsScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#39FF14" size="large" />
+        <ActivityIndicator color={primaryColor} size="large" />
       </View>
     );
   }
@@ -134,27 +133,33 @@ export default function StatsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Stats</Text>
 
-      {/* Summary Cards */}
       <View style={styles.grid}>
         <View style={styles.gridCard}>
-          <Text style={styles.gridValue}>{totalKm.toFixed(1)}</Text>
+          <Text style={[styles.gridValue, { color: primaryColor }]}>
+            {totalKm.toFixed(1)}
+          </Text>
           <Text style={styles.gridLabel}>Total km</Text>
         </View>
         <View style={styles.gridCard}>
-          <Text style={styles.gridValue}>{totalRuns}</Text>
+          <Text style={[styles.gridValue, { color: primaryColor }]}>
+            {totalRuns}
+          </Text>
           <Text style={styles.gridLabel}>Total Runs</Text>
         </View>
         <View style={styles.gridCard}>
-          <Text style={styles.gridValue}>{formatPace(avgPace)}</Text>
+          <Text style={[styles.gridValue, { color: primaryColor }]}>
+            {formatPace(avgPace)}
+          </Text>
           <Text style={styles.gridLabel}>Avg Pace</Text>
         </View>
         <View style={styles.gridCard}>
-          <Text style={styles.gridValue}>{totalCalories}</Text>
+          <Text style={[styles.gridValue, { color: primaryColor }]}>
+            {totalCalories}
+          </Text>
           <Text style={styles.gridLabel}>Total Calories</Text>
         </View>
       </View>
 
-      {/* Monthly Chart */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Monthly Distance (km)</Text>
         {monthlyData.length === 0 ? (
@@ -163,12 +168,17 @@ export default function StatsScreen() {
           <View style={styles.chart}>
             {monthlyData.map((d, i) => (
               <View key={i} style={styles.barWrapper}>
-                <Text style={styles.barValue}>{d.km}</Text>
+                <Text style={[styles.barValue, { color: primaryColor }]}>
+                  {d.km}
+                </Text>
                 <View style={styles.barContainer}>
                   <View
                     style={[
                       styles.bar,
-                      { height: Math.max((d.km / maxKm) * 120, 4) },
+                      {
+                        height: Math.max((d.km / maxKm) * 120, 4),
+                        backgroundColor: primaryColor,
+                      },
                     ]}
                   />
                 </View>
@@ -179,7 +189,6 @@ export default function StatsScreen() {
         )}
       </View>
 
-      {/* Personal Bests */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Personal Bests</Text>
         {personalBests.length === 0 ? (
@@ -192,7 +201,9 @@ export default function StatsScreen() {
               <View style={styles.pbRow}>
                 <Text style={styles.pbLabel}>{pb.label}</Text>
                 <View style={styles.pbRight}>
-                  <Text style={styles.pbTime}>{formatTime(pb.duration)}</Text>
+                  <Text style={[styles.pbTime, { color: primaryColor }]}>
+                    {formatTime(pb.duration)}
+                  </Text>
                   <Text style={styles.pbDate}>{pb.date}</Text>
                 </View>
               </View>
@@ -202,7 +213,6 @@ export default function StatsScreen() {
         )}
       </View>
 
-      {/* Recent Runs List */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>All Runs</Text>
         {runs.length === 0 ? (
@@ -221,7 +231,7 @@ export default function StatsScreen() {
                   <Text style={styles.runStat}>
                     {formatTime(run.duration_seconds)}
                   </Text>
-                  <Text style={styles.runPace}>
+                  <Text style={[styles.runPace, { color: primaryColor }]}>
                     {formatPace(run.avg_pace_sec_per_km)}
                   </Text>
                 </View>
@@ -260,7 +270,7 @@ const styles = StyleSheet.create({
     borderColor: "#0D0D0D",
     alignItems: "center",
   },
-  gridValue: { color: "#39FF14", fontSize: 22, fontWeight: "bold" },
+  gridValue: { fontSize: 22, fontWeight: "bold" },
   gridLabel: {
     color: "#888888",
     fontSize: 12,
@@ -294,9 +304,9 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   barWrapper: { alignItems: "center", flex: 1 },
-  barValue: { color: "#39FF14", fontSize: 10, marginBottom: 4 },
+  barValue: { fontSize: 10, marginBottom: 4 },
   barContainer: { width: 28, justifyContent: "flex-end", height: 120 },
-  bar: { width: 28, backgroundColor: "#39FF14", borderRadius: 4 },
+  bar: { width: 28, borderRadius: 4 },
   barLabel: {
     color: "#888888",
     fontSize: 10,
@@ -311,7 +321,7 @@ const styles = StyleSheet.create({
   },
   pbLabel: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
   pbRight: { alignItems: "flex-end" },
-  pbTime: { color: "#39FF14", fontSize: 16, fontWeight: "bold" },
+  pbTime: { fontSize: 16, fontWeight: "bold" },
   pbDate: { color: "#888888", fontSize: 12 },
   runRow: {
     flexDirection: "row",
@@ -322,6 +332,6 @@ const styles = StyleSheet.create({
   runDistance: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
   runRight: { alignItems: "flex-end" },
   runStat: { color: "#FFFFFF", fontSize: 14 },
-  runPace: { color: "#39FF14", fontSize: 13 },
+  runPace: { fontSize: 13 },
   divider: { height: 1, backgroundColor: "#1A1A1A" },
 });

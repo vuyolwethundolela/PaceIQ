@@ -8,13 +8,14 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/themeContext";
 
 export default function RunScreen() {
+  const { primaryColor } = useTheme();
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [distance, setDistance] = useState(0);
-  const [currentPace, setCurrentPace] = useState(0);
   const [calories, setCalories] = useState(0);
   const [coords, setCoords] = useState<any[]>([]);
   const [locationPermission, setLocationPermission] = useState(false);
@@ -23,7 +24,6 @@ export default function RunScreen() {
   const timerRef = useRef<any>(null);
   const locationRef = useRef<any>(null);
   const lastCoordRef = useRef<any>(null);
-  const startTimeRef = useRef<any>(null);
 
   useEffect(() => {
     requestPermission();
@@ -68,11 +68,8 @@ export default function RunScreen() {
     setCalories(0);
     setCoords([]);
     setSaved(false);
-    startTimeRef.current = Date.now();
 
-    timerRef.current = setInterval(() => {
-      setDuration((prev) => prev + 1);
-    }, 1000);
+    timerRef.current = setInterval(() => setDuration((prev) => prev + 1), 1000);
 
     locationRef.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, distanceInterval: 5 },
@@ -84,7 +81,6 @@ export default function RunScreen() {
           timestamp: loc.timestamp,
         };
         setCoords((prev) => [...prev, newCoord]);
-
         if (lastCoordRef.current) {
           const d = getDistanceBetween(
             lastCoordRef.current.lat,
@@ -157,9 +153,7 @@ export default function RunScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user || distance < 0.01) return;
-
     const avgPace = distance > 0 ? Math.round(duration / distance) : 0;
-
     const { error } = await supabase.from("runs").insert({
       user_id: user.id,
       date: new Date().toISOString().split("T")[0],
@@ -169,7 +163,6 @@ export default function RunScreen() {
       calories: calories,
       route_coordinates: coords,
     });
-
     if (!error) setSaved(true);
   }
 
@@ -182,8 +175,8 @@ export default function RunScreen() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
-  function formatPace(seconds: number) {
-    if (!seconds || distance < 0.01) return "--'--\"";
+  function formatPace() {
+    if (distance < 0.01) return "--'--\"";
     const pace = Math.round(duration / distance);
     const m = Math.floor(pace / 60);
     const s = pace % 60;
@@ -194,32 +187,38 @@ export default function RunScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Run Tracker</Text>
 
-      {/* Stats Grid */}
       <View style={styles.statsGrid}>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{formatTime(duration)}</Text>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
+            {formatTime(duration)}
+          </Text>
           <Text style={styles.statLabel}>Duration</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{distance.toFixed(2)}</Text>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
+            {distance.toFixed(2)}
+          </Text>
           <Text style={styles.statLabel}>Distance (km)</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{formatPace(currentPace)}</Text>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
+            {formatPace()}
+          </Text>
           <Text style={styles.statLabel}>Pace /km</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{calories}</Text>
+          <Text style={[styles.statValue, { color: primaryColor }]}>
+            {calories}
+          </Text>
           <Text style={styles.statLabel}>Calories</Text>
         </View>
       </View>
 
-      {/* GPS Status */}
       <View style={styles.gpsCard}>
         <View
           style={[
             styles.gpsDot,
-            locationPermission ? styles.gpsActive : styles.gpsInactive,
+            { backgroundColor: locationPermission ? primaryColor : "#FF4444" },
           ]}
         />
         <Text style={styles.gpsText}>
@@ -230,16 +229,19 @@ export default function RunScreen() {
         )}
       </View>
 
-      {/* Saved Message */}
       {saved && (
-        <View style={styles.savedCard}>
-          <Text style={styles.savedText}>Run saved successfully!</Text>
+        <View style={[styles.savedCard, { borderColor: primaryColor }]}>
+          <Text style={[styles.savedText, { color: primaryColor }]}>
+            Run saved successfully!
+          </Text>
         </View>
       )}
 
-      {/* Controls */}
       {!isRunning && !saved && (
-        <TouchableOpacity style={styles.startButton} onPress={startRun}>
+        <TouchableOpacity
+          style={[styles.startButton, { backgroundColor: primaryColor }]}
+          onPress={startRun}
+        >
           <Text style={styles.startButtonText}>Start Run</Text>
         </TouchableOpacity>
       )}
@@ -257,8 +259,13 @@ export default function RunScreen() {
 
       {isRunning && isPaused && (
         <View style={styles.controlRow}>
-          <TouchableOpacity style={styles.resumeButton} onPress={resumeRun}>
-            <Text style={styles.resumeButtonText}>Resume</Text>
+          <TouchableOpacity
+            style={[styles.resumeButton, { borderColor: primaryColor }]}
+            onPress={resumeRun}
+          >
+            <Text style={[styles.resumeButtonText, { color: primaryColor }]}>
+              Resume
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.stopButton} onPress={stopRun}>
             <Text style={styles.stopButtonText}>Stop & Save</Text>
@@ -268,7 +275,7 @@ export default function RunScreen() {
 
       {saved && (
         <TouchableOpacity
-          style={styles.startButton}
+          style={[styles.startButton, { backgroundColor: primaryColor }]}
           onPress={() => {
             setSaved(false);
             setDuration(0);
@@ -304,7 +311,7 @@ const styles = StyleSheet.create({
     borderColor: "#0D0D0D",
     alignItems: "center",
   },
-  statValue: { color: "#39FF14", fontSize: 28, fontWeight: "bold" },
+  statValue: { fontSize: 28, fontWeight: "bold" },
   statLabel: {
     color: "#888888",
     fontSize: 12,
@@ -320,8 +327,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   gpsDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
-  gpsActive: { backgroundColor: "#39FF14" },
-  gpsInactive: { backgroundColor: "#FF4444" },
   gpsText: { color: "#FFFFFF", fontSize: 14, flex: 1 },
   gpsPoints: { color: "#888888", fontSize: 12 },
   savedCard: {
@@ -331,11 +336,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#39FF14",
   },
-  savedText: { color: "#39FF14", fontSize: 16, fontWeight: "bold" },
+  savedText: { fontSize: 16, fontWeight: "bold" },
   startButton: {
-    backgroundColor: "#39FF14",
     borderRadius: 16,
     padding: 20,
     alignItems: "center",
@@ -360,9 +363,8 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#39FF14",
   },
-  resumeButtonText: { color: "#39FF14", fontSize: 18, fontWeight: "bold" },
+  resumeButtonText: { fontSize: 18, fontWeight: "bold" },
   stopButton: {
     flex: 1,
     backgroundColor: "#FF4444",

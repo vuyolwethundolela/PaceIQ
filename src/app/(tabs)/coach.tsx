@@ -12,11 +12,12 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/themeContext";
 
 const SYSTEM_PROMPT = `You are PaceIQ, an expert AI running coach and fitness advisor. You are friendly, motivating, and specific. You help runners with:
 - Training plans and pace advice
 - Nutrition and diet for runners
-- Recovery and injury prevention  
+- Recovery and injury prevention
 - Motivation and mental coaching
 - Race preparation strategies
 - Weight management through running
@@ -25,6 +26,7 @@ const SYSTEM_PROMPT = `You are PaceIQ, an expert AI running coach and fitness ad
 When you notice a runner's pace is slowing down based on their data, proactively motivate them and suggest reasons why. Always be encouraging. Keep responses concise but helpful — under 200 words unless a detailed plan is requested.`;
 
 export default function CoachScreen() {
+  const { primaryColor } = useTheme();
   const [messages, setMessages] = useState<any[]>([
     {
       role: "assistant",
@@ -36,7 +38,6 @@ export default function CoachScreen() {
   const [loading, setLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
-  const [isPro] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [recentRuns, setRecentRuns] = useState<any[]>([]);
   const scrollRef = useRef<any>(null);
@@ -100,10 +101,7 @@ export default function CoachScreen() {
     setLoading(true);
 
     try {
-      const contextPrompt = `${SYSTEM_PROMPT}
-
-Runner Profile: ${JSON.stringify(profile || {})}
-Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
+      const contextPrompt = `${SYSTEM_PROMPT}\n\nRunner Profile: ${JSON.stringify(profile || {})}\nRecent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
 
       const apiMessages = updatedMessages.map((m) => ({
         role: m.role,
@@ -133,8 +131,7 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
       const data = await response.json();
       const reply =
         data.content?.[0]?.text || "Sorry I could not respond right now.";
-      const assistantMessage = { role: "assistant", content: reply };
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
 
       const {
         data: { user },
@@ -146,12 +143,11 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
         ]);
       }
     } catch (error: any) {
-      console.error("Coach error:", error);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `Sorry, I ran into an issue: ${error.message}. Please check your API key or try again.`,
+          content: `Sorry, I ran into an issue: ${error.message}. Please add your Anthropic API key to enable AI coaching.`,
         },
       ]);
     }
@@ -167,7 +163,7 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
     >
       <View style={styles.header}>
         <Text style={styles.pageTitle}>AI Coach</Text>
-        <View style={styles.proBadge}>
+        <View style={[styles.proBadge, { backgroundColor: primaryColor }]}>
           <Text style={styles.proBadgeText}>PRO</Text>
         </View>
       </View>
@@ -196,7 +192,7 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
               style={[
                 styles.bubble,
                 msg.role === "user"
-                  ? styles.userBubble
+                  ? { ...styles.userBubble, backgroundColor: primaryColor }
                   : styles.assistantBubble,
               ]}
             >
@@ -213,7 +209,9 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
                   style={styles.speakButton}
                   onPress={() => speakText(msg.content, i)}
                 >
-                  <Text style={styles.speakButtonText}>
+                  <Text
+                    style={[styles.speakButtonText, { color: primaryColor }]}
+                  >
                     {isSpeaking && speakingIndex === i ? "⏹ Stop" : "🔊 Listen"}
                   </Text>
                 </TouchableOpacity>
@@ -227,7 +225,7 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
               <Text style={styles.coachAvatarText}>🤖</Text>
             </View>
             <View style={styles.assistantBubble}>
-              <ActivityIndicator color="#39FF14" size="small" />
+              <ActivityIndicator color={primaryColor} size="small" />
             </View>
           </View>
         )}
@@ -241,11 +239,11 @@ Recent Runs (last 5): ${JSON.stringify(recentRuns || [])}`;
           value={input}
           onChangeText={setInput}
           multiline
-          onSubmitEditing={sendMessage}
         />
         <TouchableOpacity
           style={[
             styles.sendButton,
+            { backgroundColor: primaryColor },
             (!input.trim() || loading) && styles.sendButtonDisabled,
           ]}
           onPress={sendMessage}
@@ -268,12 +266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   pageTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "bold", flex: 1 },
-  proBadge: {
-    backgroundColor: "#39FF14",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
+  proBadge: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4 },
   proBadgeText: { color: "#0D0D0D", fontWeight: "bold", fontSize: 13 },
   messagesContainer: { flex: 1, paddingHorizontal: 16 },
   messages: { paddingVertical: 16, gap: 12 },
@@ -290,7 +283,7 @@ const styles = StyleSheet.create({
   },
   coachAvatarText: { fontSize: 18 },
   bubble: { maxWidth: "75%", borderRadius: 18, padding: 14 },
-  userBubble: { backgroundColor: "#39FF14", borderBottomRightRadius: 4 },
+  userBubble: { borderBottomRightRadius: 4 },
   assistantBubble: {
     backgroundColor: "#141414",
     borderBottomLeftRadius: 4,
@@ -302,7 +295,7 @@ const styles = StyleSheet.create({
   userText: { color: "#0D0D0D" },
   assistantText: { color: "#FFFFFF" },
   speakButton: { marginTop: 8, alignSelf: "flex-start" },
-  speakButtonText: { color: "#39FF14", fontSize: 12, fontWeight: "bold" },
+  speakButtonText: { fontSize: 12, fontWeight: "bold" },
   inputRow: {
     flexDirection: "row",
     padding: 16,
@@ -322,7 +315,6 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   sendButton: {
-    backgroundColor: "#39FF14",
     borderRadius: 12,
     paddingHorizontal: 20,
     height: 48,
